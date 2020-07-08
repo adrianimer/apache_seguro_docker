@@ -1,0 +1,96 @@
+version: '3'
+
+services:
+  apache:
+    build: './apache'
+    restart: always
+    ports:
+      - 80:80
+      - 443:443
+    networks: 
+      - frontend
+      - backend
+    volumes:
+      - ./logs:/usr/local/apache2/logs
+      - ./adrianimer:/usr/local/apache2/htdocs/adrianimer
+      - ./tomchi:/usr/local/apache2/htdocs/tomchi
+      - ./cert/:/usr/local/apache2/cert/
+    depends_on:
+      - php
+      - mysql
+  php:
+    build: './php'
+    restart: always
+    networks: 
+      - backend
+    volumes:
+      - ./adrianimer:/usr/local/apache2/htdocs/adrianimer
+      - ./tomchi:/usr/local/apache2/htdocs/tomchi
+      - ./tmp:/usr/local/tmp
+  mysql:
+    build: './mysql'
+    restart: always
+    networks:
+      - backend
+    volumes:
+      - ./database:/var/lib/mysql
+    environment:
+      - MYSQL_DATABASE=wordpress1
+      - MYSQL_DATABASE=wordpress2
+  wordpress1:
+    depends_on:
+      - mysql
+      - apache
+      - php
+    image: wordpress:5.1.1-fpm-alpine
+    container_name: wordpress1
+    restart: unless-stopped
+    environment:
+      - WORDPRESS_DB_HOST=mysql:3306
+      - WORDPRESS_DB_PASSWORD=12345678
+      - WORDPRESS_DB_NAME=wordpress1
+    volumes:
+      - ./adrianimer:/var/www/html
+    networks:
+      - frontend
+      - backend
+  wordpress2:
+    depends_on:
+      - mysql
+      - apache
+      - wordpress1
+      - php
+    image: wordpress:5.1.1-fpm-alpine
+    container_name: wordpress2
+    restart: unless-stopped
+    environment:
+      - WORDPRESS_DB_HOST=mysql:3306
+      - WORDPRESS_DB_PASSWORD=12345678
+      - WORDPRESS_DB_NAME=wordpress2
+    volumes:
+      - ./tomchi:/var/www/html
+    networks:
+      - frontend
+      - backend
+  fail2ban:
+    depends_on:
+      - mysql
+      - apache
+      - php
+      - wordpress1
+      - wordpress2
+    build: './fail2ban'
+    container_name: fail2ban
+    network_mode: "host"
+    cap_add:
+      - NET_ADMIN
+      - NET_RAW
+    volumes:
+      - "./data:/data"
+      - ".log:/var/log:ro"
+    env_file:
+      - "./fail2ban.env"
+    restart: always
+networks: 
+  backend:
+  frontend:
